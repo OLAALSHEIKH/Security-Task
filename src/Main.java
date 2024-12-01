@@ -60,5 +60,4 @@ public class Main {
             System.out.println("Invalid credentials. Please try again.");
         }
     }
-    }
 }
