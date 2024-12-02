@@ -54,7 +54,7 @@ public class Main {
         System.out.print("Enter password: ");
         String password = scanner.nextLine().trim();
 
-        if (dbm.authenticate(username, password)) {
+        if (dbm.authenticateUser(username, password)) {
             System.out.println("Login successful!");
         } else {
             System.out.println("Invalid credentials. Please try again.");

@@ -42,11 +42,6 @@ public class DatabaseManager {
     }
 
 
-
-
-
-
-
     public boolean signUp(String username, String password) {
         try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
             String hashedPassword = hashPassword(password);
@@ -75,7 +70,66 @@ public class DatabaseManager {
     }
 
 
-    public boolean authenticate(String username, String password) {
+
+    public void deposit(String username, double amount) throws SQLException {
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
+            String sql = "UPDATE users SET balance = balance + ? WHERE username = ?";
+            PreparedStatement pstmt = conn.prepareStatement(sql);
+            pstmt.setDouble(1, amount);
+            pstmt.setString(2, username);
+            int rowsAffected = pstmt.executeUpdate();
+
+            if (rowsAffected == 0) {
+                throw new SQLException("User not found or insufficient funds");
+            }
+        }
+    }
+
+    public double getBalance(String username) throws SQLException {
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
+            String sql = "SELECT balance FROM users WHERE username = ?";
+            PreparedStatement pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, username);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                return rs.getDouble("balance");
+            }
+            throw new SQLException("User not found");
+        }
+    }
+
+    public boolean withdraw(String username, double amount) throws SQLException {
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
+            String sql = "SELECT balance FROM users WHERE username = ?";
+            PreparedStatement pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, username);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                double currentBalance = rs.getDouble("balance");
+
+                if (currentBalance >= amount) {
+                    sql = "UPDATE users SET balance = balance - ? WHERE username = ?";
+                    pstmt = conn.prepareStatement(sql);
+                    pstmt.setDouble(1, amount);
+                    pstmt.setString(2, username);
+                    int rowsAffected = pstmt.executeUpdate();
+
+                    if (rowsAffected == 0) {
+                        throw new SQLException("Insufficient funds");
+                    }
+
+                    return true;
+                } else {
+                    throw new SQLException("Insufficient funds");
+                }
+            }
+            throw new SQLException("User not found");
+        }
+    }
+
+    public boolean authenticateUser(String username, String password) {
         try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
             PreparedStatement pstmt = conn.prepareStatement("SELECT password FROM users WHERE username = ?");
             pstmt.setString(1, username);
@@ -128,6 +182,15 @@ public class DatabaseManager {
             return saltBase64 + ":" + Base64.getEncoder().encodeToString(digest);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 algorithm not found", e);
+        }
+    }
+    public boolean testDatabaseConnection() {
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
+            System.out.println("Database connection successful!");
+            return true;
+        } catch (SQLException e) {
+            System.err.println("Error connecting to the database: " + e.getMessage());
+            return false;
         }
     }
 
