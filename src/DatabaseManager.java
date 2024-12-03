@@ -1,24 +1,31 @@
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
+
+import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
+import java.security.AlgorithmConstraints;
 import java.sql.*;
 import java.util.Base64;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 public class DatabaseManager {
-    private static final String DB_URL = "jdbc:mysql://localhost:3306/atm_db";
+    private static final String DB_URL = "jdbc:mysql://localhost:3306/atmTask19_db";
     private static final String USER = "root";
     private static final String PASS = ""; // Replace with actual MySQL root password
+
+
+
 
     public void createDatabaseAndTables() {
         try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS);
              Statement stmt = conn.createStatement()) {
 
             // Create database if it doesn't exist
-            stmt.execute("CREATE DATABASE IF NOT EXISTS atm_db");
+            stmt.execute("CREATE DATABASE IF NOT EXISTS atmTask19_db");
 
             // Switch to the newly created database
-            stmt.execute("USE atm_db");
+            stmt.execute("USE atmTask19_db");
 
             // Set auto_increment increment to 1
             stmt.execute("SET @auto_increment = 1;");
@@ -28,7 +35,7 @@ public class DatabaseManager {
                     "id INT AUTO_INCREMENT PRIMARY KEY," +
                     "username VARCHAR(255) NOT NULL UNIQUE," +
                     "password VARCHAR(255) NOT NULL," +
-                    "balance DECIMAL(10, 2) DEFAULT 0.00)";
+                    "encrypted_balance VARCHAR(255) )";
 
 
             PreparedStatement pstmt = conn.prepareStatement(sql);
@@ -41,6 +48,128 @@ public class DatabaseManager {
         }
     }
 
+
+
+    public void deposit(String username, String amount) throws SQLException {
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
+            Algorithms rsa = new Algorithms();
+
+            // Generate keys if they don't exist
+            if (rsa.publicKey == null || rsa.privateKey == null) {
+                rsa.generateKeys(2048);
+            }
+
+            // Encrypt only the amount, not the entire balance
+            String encryptedAmount = rsa.encrypt(amount);
+            System.out.println("Decrypted amount: " + encryptedAmount);
+            // Decrypt the amount (for verification)
+            String decryptedAmount = rsa.decrypt(encryptedAmount);
+            System.out.println("Decrypted amount: " + decryptedAmount);
+
+            double amountAsDouble = Double.parseDouble(decryptedAmount);
+
+            String sql = "UPDATE users SET encrypted_balance = ? WHERE username = ?";
+            PreparedStatement pstmt = conn.prepareStatement(sql);
+
+
+
+            // Encrypt new balance using AES
+            String encryptedNewBalance = Algorithms.encrypt(String.valueOf(amountAsDouble), ATMServer.key, ATMServer.iv);
+            System.out.println(encryptedNewBalance);
+            String encryptedNew= Algorithms.decrypt(String.valueOf(encryptedNewBalance), ATMServer.key, ATMServer.iv);
+            System.out.println(encryptedNew);
+            // Set the encrypted amount as a blob
+            pstmt.setString(1, encryptedNewBalance);
+
+            // Set the username as a string
+            pstmt.setString(2, username);
+
+            int rowsAffected = pstmt.executeUpdate();
+
+            if (rowsAffected == 0) {
+                throw new SQLException("User not found");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
+
+
+    public String getBalance(String username) throws SQLException {
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
+
+            String sql = "SELECT encrypted_balance FROM users WHERE username = ?";
+            PreparedStatement pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, username);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                String encryptedBalance = rs.getString("encrypted_balance");
+
+
+                try {
+                    return Algorithms.decrypt(String.valueOf(encryptedBalance), ATMServer.key, ATMServer.iv);  // Return the decrypted balance as a string
+                } catch (Exception e) {
+                    throw new SQLException("Failed to decrypt balance", e);
+                }
+            }
+
+            throw new SQLException("User not found");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
+
+
+
+
+
+
+
+    public boolean withdraw(String username, String amount) throws SQLException {
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
+            Algorithms rsa = new Algorithms();
+
+            // Generate keys if they don't exist
+            if (rsa.publicKey == null || rsa.privateKey == null) {
+                rsa.generateKeys(2048);
+            }
+
+            // Encrypt only the amount, not the entire balance
+            String encryptedAmount = rsa.encrypt(amount);
+            System.out.println("Decrypted amount: " + encryptedAmount);
+            // Decrypt the amount (for verification)
+            String decryptedAmount = rsa.decrypt(encryptedAmount);
+            System.out.println("Decrypted amount: " + decryptedAmount);
+
+            double amountAsDouble = Double.parseDouble(decryptedAmount);
+
+            String sql = "UPDATE users SET encrypted_balance = ? WHERE username = ?";
+            PreparedStatement pstmt = conn.prepareStatement(sql);
+
+
+            // Encrypt new balance using AES
+            String encryptedNewBalance = Algorithms.encrypt(String.valueOf(amountAsDouble), ATMServer.key, ATMServer.iv);
+            System.out.println(encryptedNewBalance);
+            String encryptedNew = Algorithms.decrypt(String.valueOf(encryptedNewBalance), ATMServer.key, ATMServer.iv);
+            System.out.println(encryptedNew);
+            // Set the encrypted amount as a blob
+            pstmt.setString(1, encryptedNewBalance);
+
+            // Set the username as a string
+            pstmt.setString(2, username);
+
+            int rowsAffected = pstmt.executeUpdate();
+
+            return  true;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     public boolean signUp(String username, String password) {
         try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
@@ -69,65 +198,6 @@ public class DatabaseManager {
         }
     }
 
-
-
-    public void deposit(String username, double amount) throws SQLException {
-        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
-            String sql = "UPDATE users SET balance = balance + ? WHERE username = ?";
-            PreparedStatement pstmt = conn.prepareStatement(sql);
-            pstmt.setDouble(1, amount);
-            pstmt.setString(2, username);
-            int rowsAffected = pstmt.executeUpdate();
-
-            if (rowsAffected == 0) {
-                throw new SQLException("User not found or insufficient funds");
-            }
-        }
-    }
-
-    public double getBalance(String username) throws SQLException {
-        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
-            String sql = "SELECT balance FROM users WHERE username = ?";
-            PreparedStatement pstmt = conn.prepareStatement(sql);
-            pstmt.setString(1, username);
-            ResultSet rs = pstmt.executeQuery();
-
-            if (rs.next()) {
-                return rs.getDouble("balance");
-            }
-            throw new SQLException("User not found");
-        }
-    }
-
-    public boolean withdraw(String username, double amount) throws SQLException {
-        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
-            String sql = "SELECT balance FROM users WHERE username = ?";
-            PreparedStatement pstmt = conn.prepareStatement(sql);
-            pstmt.setString(1, username);
-            ResultSet rs = pstmt.executeQuery();
-
-            if (rs.next()) {
-                double currentBalance = rs.getDouble("balance");
-
-                if (currentBalance >= amount) {
-                    sql = "UPDATE users SET balance = balance - ? WHERE username = ?";
-                    pstmt = conn.prepareStatement(sql);
-                    pstmt.setDouble(1, amount);
-                    pstmt.setString(2, username);
-                    int rowsAffected = pstmt.executeUpdate();
-
-                    if (rowsAffected == 0) {
-                        throw new SQLException("Insufficient funds");
-                    }
-
-                    return true;
-                } else {
-                    throw new SQLException("Insufficient funds");
-                }
-            }
-            throw new SQLException("User not found");
-        }
-    }
 
     public boolean authenticateUser(String username, String password) {
         try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS)) {
@@ -193,5 +263,5 @@ public class DatabaseManager {
             return false;
         }
     }
-
 }
+

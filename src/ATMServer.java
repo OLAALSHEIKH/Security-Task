@@ -1,11 +1,30 @@
+import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 
 
+
 public class ATMServer {
 
     private static final int PORT = 3000;
+
+    // Generate key and IV
+    public static SecretKey key;
+
+    static {
+        try {
+            key = Algorithms.generateAESKey();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    ;
+
+
+    public static IvParameterSpec iv = Algorithms.generateIV();
 
     public static void main(String[] args) {
         DatabaseManager dbManager = new DatabaseManager();

@@ -6,6 +6,7 @@ import java.net.Socket;
 import java.sql.SQLException;
 import java.util.Scanner;
 
+
 public class ATMClient {
     private static DatabaseManager dbm;
 
@@ -101,16 +102,33 @@ public class ATMClient {
                 case 1:
                     try {
                         System.out.print("Enter amount to deposit: ");
-                        double amount = scanner.nextDouble();
-                        dbm.deposit(userName, amount);
-                        System.out.println("Deposit successful!");
-                    } catch (SQLException e) {
-                        System.err.println("Error during deposit: " + e.getMessage());
+                        Double amount = scanner.nextDouble();
+
+                        try {
+                            Algorithms rsa = new Algorithms();
+
+                            // Generate keys if they don't exist
+                            if (rsa.publicKey == null || rsa.privateKey == null) {
+                                rsa.generateKeys(2048);
+                            }
+
+                            String amountAsString = String.valueOf(amount);
+                            // Encrypt only the amount, not the entire balance
+                            //String encryptedAmount = rsa.encrypt(amountAsString);
+                            // System.out.println("Decrypted amount: " + encryptedAmount);
+                            dbm.deposit(userName,amountAsString );
+                            System.out.println("Deposit successful!");
+                        } catch (Exception e) {
+                            System.err.println("Error encrypting the amount: " + e.getMessage());
+                        }
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
                     }
+
                     break;
                 case 2:
                     try {
-                        double balance = dbm.getBalance(userName);
+                        String balance = dbm.getBalance(userName);
                         System.out.println("Your current balance is: $" + balance);
                     } catch (SQLException e) {
                         System.err.println("Error during balance inquiry: " + e.getMessage());
@@ -118,9 +136,20 @@ public class ATMClient {
                     break;
                 case 3:
                     try {
+                        Algorithms rsa = new Algorithms();
+
+                        // Generate keys if they don't exist
+                        if (rsa.publicKey == null || rsa.privateKey == null) {
+                            rsa.generateKeys(2048);
+                        }
                         System.out.print("Enter amount to withdraw: ");
                         double amountToWithdraw = scanner.nextDouble();
-                        boolean success = dbm.withdraw(userName, amountToWithdraw);
+                        String amountAsString = String.valueOf(amountToWithdraw);
+
+                        // Encrypt only the amount, not the entire balance
+                        String encryptedAmount = rsa.encrypt(amountAsString);
+                        System.out.println("encrypted amount: " + encryptedAmount);
+                        boolean success = dbm.withdraw(userName, amountAsString);
                         if (success) {
                             System.out.println("Withdrawal successful!");
                         } else {
@@ -128,6 +157,8 @@ public class ATMClient {
                         }
                     } catch (SQLException e) {
                         System.err.println("Error during withdrawal: " + e.getMessage());
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
                     }
                     break;
                 case 4:
